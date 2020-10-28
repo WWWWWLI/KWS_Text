@@ -1,8 +1,6 @@
 import sys
 
-sys.path.append('/apdcephfs/private_liamlwang/KWS_Text/')
-sys.path.append('/apdcephfs/private_liamlwang/KWS_Text/models')
-sys.path.append('/apdcephfs/private_liamlwang/KWS_Text/utils')
+sys.path.append('../')
 import torch
 import torchaudio
 import numpy as np
@@ -13,7 +11,7 @@ from torch.utils.data import DataLoader
 from prefetch_generator import BackgroundGenerator
 
 
-class SpeechDatasetV2(Dataset):
+class GoogleSpeechCommandDatasetV2(Dataset):
     def __init__(self, set='train', mode=''):
         self.commands = ['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go',
                          'backward', 'forward', 'follow', 'learn']
@@ -50,7 +48,7 @@ class SpeechDatasetV2(Dataset):
             self.text_emb = np.load(config.TEXTEMB, allow_pickle=True).item()
 
     def __getitem__(self, i):
-        if self.mode == 'NoText': # return normal data: waveform, label
+        if self.mode == 'NoText':  # return normal data: waveform, label
             waveform, _ = torchaudio.load(self.dataset_path + self.y_data[i] + '/' + self.x_data[i])
             waveform = self.normalize(waveform)
             label_num = self.class_to_num(self.y_data[i])
@@ -104,6 +102,15 @@ class SpeechDatasetV2(Dataset):
         tensor_minusmean = tensor - tensor.mean()
         return tensor_minusmean / tensor_minusmean.abs().max()
 
+    def padding(self, sig):
+        # padding the signal tensor to 1s (1,16000)
+        sig_len = sig.size()[1]
+        if sig_len == 16000:
+            return sig
+        else:
+            padded_sig = torch.zeros(1, 16000)
+            padded_sig[:, :sig_len] = sig
+            return padded_sig
 
 
 class DataLoaderX(DataLoader):
@@ -117,7 +124,7 @@ if __name__ == '__main__':
 
     os.environ['CUDA_VISIBLE_DEVICES'] = "0"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dataset = SpeechDatasetV2('valid')
+    dataset = GoogleSpeechCommandDatasetV2('valid', 'NoText')
     dataloader = DataLoader(dataset, batch_size=256, shuffle=True, num_workers=4)
     for data in dataloader:
         # start = time.time()
