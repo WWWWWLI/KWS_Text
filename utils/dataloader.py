@@ -1,3 +1,24 @@
+# -*- coding: utf-8 -*-
+########################################################################
+#
+#  The dataloader of Google speech command dataset V2
+#  Note that every audio is padding zero to 1s
+#  Several ways to load data according to different training methods:
+#       1.'NoText':
+#           Return the audio and the corresponding label
+#       2.'Text'：
+#           Return audio, word embedding matching with audio label, word embedding not matching audio label, audio label
+#       3.'TextAnchor':
+#           Return positive audio, negative audio, positive audio word embedding, positive label, negative label
+#       4.'CCA':
+#           Return audio, word embedding corresponding to audio, label
+#
+#  Author: Li Wang (1901213145@pku.edu.cn)
+#
+#  Date:  29 Oct, 2020
+#
+########################################################################
+
 import sys
 
 sys.path.append('../')
