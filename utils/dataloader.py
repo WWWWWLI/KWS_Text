@@ -33,7 +33,7 @@ from prefetch_generator import BackgroundGenerator
 
 
 class GoogleSpeechCommandDatasetV2(Dataset):
-    def __init__(self, set='train', mode=''):
+    def __init__(self, set='train'):
         self.commands = ['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go',
                          'backward', 'forward', 'follow', 'learn']
         self.unknow_words = ["bed", "bird", "cat", "dog", "happy", "house", "marvin", "sheila", "tree", "wow", 'visual',
@@ -64,8 +64,14 @@ class GoogleSpeechCommandDatasetV2(Dataset):
         self.x_data = [i[1] for i in self.data]
         self.y_data = [i[0] for i in self.data]
         self.num_data = len(self.y_data)
-        self.mode = mode
-        if self.mode != 'Text':
+        if set == 'train' or set == 'valid':
+            self.mode = config.TRAIN.MODE
+        elif set == 'test':
+            self.mode = config.TEST.MODE
+        else:
+            print('[ERROR] Wrong SET!')
+            exit(1)
+        if self.mode != 'NoText':
             self.text_emb = np.load(config.TEXTEMB, allow_pickle=True).item()
 
     def __getitem__(self, i):
@@ -145,7 +151,7 @@ if __name__ == '__main__':
 
     os.environ['CUDA_VISIBLE_DEVICES'] = "0"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dataset = GoogleSpeechCommandDatasetV2('valid', 'NoText')
+    dataset = GoogleSpeechCommandDatasetV2('valid')
     dataloader = DataLoader(dataset, batch_size=256, shuffle=True, num_workers=4)
     for data in dataloader:
         # start = time.time()
