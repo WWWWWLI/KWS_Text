@@ -100,9 +100,9 @@ class GoogleSpeechCommandDatasetV2(Dataset):
                 neg_index = choice(range(self.num_data))
             neg_waveform, _ = torchaudio.load(self.dataset_path + self.y_data[neg_index] + '/' + self.x_data[neg_index])
             neg_waveform = self.normalize(neg_waveform)
-            neg_label_num = self.class_to_num(self.y_data[neg_index])
+            # neg_label_num = self.class_to_num(self.y_data[neg_index])
             pos_word_vec = self.text_emb[self.y_data[i]]
-            return pos_waveform, neg_waveform, pos_word_vec, pos_label_num, neg_label_num
+            return pos_waveform, neg_waveform, pos_word_vec, pos_label_num
         elif self.mode == 'CCA':
             waveform, _ = torchaudio.load(self.dataset_path + self.y_data[i] + '/' + self.x_data[i])
             waveform = self.normalize(waveform)
