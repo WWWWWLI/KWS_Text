@@ -223,10 +223,10 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir):
 
                     pos, audio_embedding_pos, audio_embedding_neg, text_embedding = net(pos_waveform, neg_waveform,
                                                                                         pos_word_vec)
-                    train_ce_loss = ce_criterion(pos, pos_label) * config.TRAIN.BATCHSIZE
+                    train_ce_loss = ce_criterion(pos, pos_label)
                     train_tri_loss = tri_criterion(text_embedding, audio_embedding_pos, audio_embedding_neg)
-                    sum_train_ce_loss = sum_train_ce_loss + train_ce_loss.item()
-                    sum_train_tri_loss = sum_train_tri_loss + train_tri_loss.item()
+                    sum_train_ce_loss = sum_train_ce_loss + train_ce_loss.item() * config.TRAIN.BATCHSIZE
+                    sum_train_tri_loss = sum_train_tri_loss + train_tri_loss.item() * config.TRAIN.BATCHSIZE
                     train_loss = 0.5 * train_ce_loss + 0.5 * train_tri_loss
 
                     train_loss.backward()
@@ -292,7 +292,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir):
 
         print(message, file=log_file)
 
-        valid_loss, valid_acc = valid(net, device=device, epoch=epoch)
+        valid_loss, valid_acc = valid(net, device=device, epoch=epoch, log_file=log_file)
         scheduler.step(valid_acc)  # valid acc not increase
 
         # Update best valid models
@@ -335,7 +335,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir):
     test_net(best_net, savedir, device, printnet=False)
 
 
-def valid(net, device=None, epoch=1):
+def valid(net, device=None, epoch=1, log_file=None):
     net.eval()
     valid_dataset = SpeechDatasetV2('valid')
     valid_dataloader = DataLoader(dataset=valid_dataset, batch_size=config.VALID.BATCHSIZE, shuffle=False,
@@ -354,44 +354,177 @@ def valid(net, device=None, epoch=1):
 
     with torch.no_grad():
         net = net.to(device)
-        valid_loss = 0
-        correct = 0
-        batch_id = 1
-        with tqdm(valid_dataloader, ncols=200) as t:
-            if not config.TEXT:
+        with tqdm(valid_dataloader, desc='Valid', ncols=200) as t:
+            if config.TRAIN.MODE == 'NoText':
+                sum_valid_ce_loss = 0
+                batch_id = 0
+                correct = 0
+                start_valid_time = time.time()
                 for (waveform, target) in t:
-                    t.set_description('Epoch {}'.format(epoch))
+                    batch_id += 1
+
                     waveform = waveform.type(torch.FloatTensor)
                     waveform, target = waveform.to(device), target.to(device)
+
                     output = net(waveform)
+
                     valid_ce_loss = ce_criterion(output, target)
+
+                    sum_valid_ce_loss += valid_ce_loss.item() * config.VALID.BATCHSIZE
+
                     pred = output.max(1, keepdim=True)[1]
                     correct += pred.eq(target.view_as(pred)).sum().item()
+
                     t.set_postfix(valid_ce_loss=valid_ce_loss.item(), acc=correct / batch_id / config.VALID.BATCHSIZE)
-            else:
+                end_valid_time = time.time()
+                valid_acc = correct / len(valid_dataloader.dataset)
+                valid_loss = sum_valid_ce_loss / len(valid_dataloader.dataset)
+                message = '[{}][Valid] valid_acc:{}, valid_ce_loss:{}, valid_time(s):{}'.format(
+                    datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
+                    valid_acc,
+                    sum_valid_ce_loss / len(valid_dataloader.dataset),
+                    end_valid_time - start_valid_time
+                )
+                print(message, file=log_file)
+                return valid_loss, valid_acc
+
+            elif config.TRAIN.MODE == 'Text':
+                sum_valid_ce_loss = 0
+                sum_valid_tri_loss = 0
+                batch_id = 0
+                correct = 0
+                start_valid_time = time.time()
                 for (waveform, match_word_vec, unmatch_word_vec, target) in t:
-                    t.set_description('Epoch {}'.format(epoch))
+                    batch_id += 1
+
                     waveform = waveform.type(torch.FloatTensor)
                     match_word_vec = match_word_vec.type(torch.FloatTensor)
                     unmatch_word_vec = unmatch_word_vec.type(torch.FloatTensor)
-                    waveform, match_word_vec, unmatch_word_vec, target = waveform.to(device), match_word_vec.to(
-                        device), unmatch_word_vec.to(device), target.to(device)
+                    waveform = waveform.to(device)
+                    match_word_vec = match_word_vec.to(device)
+                    unmatch_word_vec = unmatch_word_vec.to(device)
+                    target = target.to(device)
+
                     output, audio_embedding, match_word_vec, unmatch_word_vec = net(waveform, match_word_vec,
                                                                                     unmatch_word_vec)
+
                     valid_ce_loss = ce_criterion(output, target)
                     valid_tri_loss = tri_criterion(audio_embedding, match_word_vec, unmatch_word_vec)
+                    sum_valid_ce_loss += valid_ce_loss.item() * config.VALID.BATCHSIZE
+                    sum_valid_tri_loss += valid_tri_loss.item() * config.VALID.BATCHSIZE
+
                     pred = output.max(1, keepdim=True)[1]
                     correct += pred.eq(target.view_as(pred)).sum().item()
-                    valid_loss = valid_loss + valid_ce_loss + valid_tri_loss
-                    t.set_postfix(valid_ce_loss=valid_ce_loss.item(), valid_tri_loss=valid_tri_loss.item(),
+
+                    t.set_postfix(valid_ce_loss=valid_ce_loss.item(),
+                                  valid_tri_loss=valid_tri_loss.item(),
                                   acc=correct / batch_id / config.VALID.BATCHSIZE)
-            batch_id += 1
-        valid_loss /= len(valid_dataloader.dataset)
-        return valid_loss, correct / len(valid_dataloader.dataset)
+
+                end_valid_time = time.time()
+                valid_acc = correct / len(valid_dataloader.dataset)
+                valid_loss = sum_valid_ce_loss / len(valid_dataloader.dataset) + \
+                             sum_valid_tri_loss / len(valid_dataloader.dataset)
+                message = '[{}][Valid] valid_acc:{}, valid_ce_loss:{}, valid_tri_loss:{}, valid_time(s):{}'.format(
+                    datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
+                    valid_acc,
+                    sum_valid_ce_loss / len(valid_dataloader.dataset),
+                    valid_tri_loss / len(valid_dataloader.dataset),
+                    end_valid_time - start_valid_time
+                )
+                print(message, file=log_file)
+                return valid_loss, valid_acc
+
+            elif config.TRAIN.MODE == 'TextAnchor':
+                sum_valid_ce_loss = 0
+                sum_valid_tri_loss = 0
+                batch_id = 0
+                correct = 0
+                start_valid_time = time.time()
+                for (pos_waveform, neg_waveform, pos_word_vec, pos_label) in t:
+                    batch_id += 1
+                    pos_waveform = pos_waveform.type(torch.FloatTensor)
+                    neg_waveform = neg_waveform.type(torch.FloatTensor)
+                    pos_word_vec = pos_word_vec.type(torch.FloatTensor)
+                    pos_waveform = pos_waveform.to(device)
+                    neg_waveform = neg_waveform.to(device)
+                    pos_word_vec = pos_word_vec.to(device)
+                    pos_label = pos_label.to(device)
+
+                    pos, audio_embedding_pos, audio_embedding_neg, text_embedding = net(pos_waveform, neg_waveform,
+                                                                                        pos_word_vec)
+
+                    valid_ce_loss = ce_criterion(pos, pos_label)
+                    valid_tri_loss = tri_criterion(text_embedding, audio_embedding_pos, audio_embedding_neg)
+                    sum_valid_ce_loss = sum_valid_ce_loss + valid_ce_loss.item() * config.TRAIN.BATCHSIZE
+                    sum_valid_tri_loss = sum_valid_tri_loss + valid_tri_loss.item() * config.TRAIN.BATCHSIZE
+
+                    pred = pos.max(1, keepdim=True)[1]
+                    correct += pred.eq(pos_label.view_as(pred)).sum().item()
+
+                    t.set_postfix(valid_ce_loss=valid_ce_loss.item(),
+                                  valid_tri_loss=valid_tri_loss.item(),
+                                  acc=correct / batch_id / config.VALID.BATCHSIZE)
+
+                end_valid_time = time.time()
+                valid_acc = correct / len(valid_dataloader.dataset)
+                valid_loss = sum_valid_ce_loss / len(valid_dataloader.dataset) + \
+                             sum_valid_tri_loss / len(valid_dataloader.dataset)
+                message = '[{}][Valid] valid_acc:{}, valid_ce_loss:{}, valid_tri_loss:{}, valid_time(s):{}'.format(
+                    datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
+                    valid_acc,
+                    sum_valid_ce_loss / len(valid_dataloader.dataset),
+                    sum_valid_tri_loss / len(valid_dataloader.dataset),
+                    end_valid_time - start_valid_time
+                )
+                print(message, file=log_file)
+                return valid_loss, valid_acc
+
+            elif config.TRAIN.MODE == 'CCA':
+                sum_valid_ce_loss = 0
+                sum_valid_cca_loss = 0
+                batch_id = 0
+                correct = 0
+                start_valid_time = time.time()
+                for (waveform, word_vec, target) in t:
+                    batch_id += 1
+
+                    waveform = waveform.type(torch.FloatTensor)
+                    word_vec = word_vec.type(torch.FloatTensor)
+                    waveform = waveform.to(device)
+                    word_vec = word_vec.to(device)
+                    target = target.to(device)
+
+                    output, audio_embedding, text_embedding = net(waveform, word_vec)
+
+                    valid_ce_loss = ce_criterion(output, target)
+                    valid_cca_loss = cca_criterion(audio_embedding, text_embedding)  # * config.TRAIN.BATCHSIZE
+                    sum_valid_ce_loss = sum_valid_ce_loss + valid_ce_loss.item() * config.TRAIN.BATCHSIZE
+                    sum_valid_cca_loss = sum_valid_cca_loss + valid_cca_loss
+
+                    pred = output.max(1, keepdim=True)[1]
+                    correct += pred.eq(target.view_as(pred)).sum().item()
+                    t.set_postfix(valid_ce_loss=valid_ce_loss.item(),
+                                  valid_tri_loss=valid_cca_loss,
+                                  acc=correct / batch_id / config.VALID.BATCHSIZE)
+                end_valid_time = time.time()
+
+                valid_acc = correct / len(valid_dataloader.dataset)
+                valid_loss = sum_valid_ce_loss / len(valid_dataloader.dataset) + \
+                             sum_valid_cca_loss / len(valid_dataloader.dataset)
+
+                message = '[{}][Valid] valid_acc:{}, valid_ce_loss:{}, valid_cca_loss:{}, valid_time(s):{}'.format(
+                    datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
+                    valid_acc,
+                    sum_valid_ce_loss / len(valid_dataloader.dataset),
+                    sum_valid_cca_loss / len(valid_dataloader.dataset),
+                    end_valid_time - start_valid_time
+                )
+                print(message, file=log_file)
+                return valid_loss, correct / len(valid_dataloader.dataset)
 
 
 if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = config.TRAIN.VISIBLEDEVICES
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    net, trained_epoch, optimizer, valid_acc = load_model()
-    train(net, trained_epoch, optimizer, valid_acc)
+    net, trained_epoch, optimizer, valid_acc, savedir = load_model()
+    train(net, trained_epoch, optimizer, valid_acc, savedir)
