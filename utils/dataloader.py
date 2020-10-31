@@ -78,10 +78,12 @@ class GoogleSpeechCommandDatasetV2(Dataset):
         if self.mode == 'NoText':  # return normal data: waveform, label
             waveform, _ = torchaudio.load(self.dataset_path + self.y_data[i] + '/' + self.x_data[i])
             waveform = self.normalize(waveform)
+            waveform = self.padding(waveform)
             label_num = self.class_to_num(self.y_data[i])
             return waveform, label_num
         elif self.mode == 'Text':
             waveform, _ = torchaudio.load(self.dataset_path + self.y_data[i] + '/' + self.x_data[i])
+            waveform = self.normalize(waveform)
             waveform = self.normalize(waveform)
             label_num = self.class_to_num(self.y_data[i])
             match_word = self.y_data[i]
@@ -94,17 +96,20 @@ class GoogleSpeechCommandDatasetV2(Dataset):
         elif self.mode == 'TextAnchor':
             pos_waveform, _ = torchaudio.load(self.dataset_path + self.y_data[i] + '/' + self.x_data[i])
             pos_waveform = self.normalize(pos_waveform)
+            pos_waveform = self.padding(pos_waveform)
             pos_label_num = self.class_to_num(self.y_data[i])
             neg_index = choice(range(self.num_data))
             while self.y_data[i] == self.y_data[neg_index]:
                 neg_index = choice(range(self.num_data))
             neg_waveform, _ = torchaudio.load(self.dataset_path + self.y_data[neg_index] + '/' + self.x_data[neg_index])
             neg_waveform = self.normalize(neg_waveform)
+            neg_waveform = self.padding(neg_waveform)
             # neg_label_num = self.class_to_num(self.y_data[neg_index])
             pos_word_vec = self.text_emb[self.y_data[i]]
             return pos_waveform, neg_waveform, pos_word_vec, pos_label_num
         elif self.mode == 'CCA':
             waveform, _ = torchaudio.load(self.dataset_path + self.y_data[i] + '/' + self.x_data[i])
+            waveform = self.normalize(waveform)
             waveform = self.normalize(waveform)
             label_num = self.class_to_num(self.y_data[i])
             word = self.y_data[i]
