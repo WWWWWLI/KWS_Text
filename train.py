@@ -13,7 +13,7 @@
 import torch
 import torch.nn as nn
 from torch import optim
-from utils.dataloader2classes import SpeechDatasetV2
+from utils.dataloader import GoogleSpeechCommandDatasetV2
 from torch.utils.data import DataLoader
 from torchsummaryX import summary
 import random
@@ -28,6 +28,7 @@ import sys
 from tqdm import tqdm
 import time
 from utils.cca_loss import cca_loss
+import logging
 
 sys.path.append(config.ROOTDIR + 'models')
 sys.path.append(config.ROOTDIR + 'utils')
@@ -45,54 +46,72 @@ def load_model():
     # create or load the model
     net = getattr(models, config.TRAIN.MODELTYPE)(num_class=config.NumClasses)
     optimizer = optim.SGD(net.parameters(), lr=config.TRAIN.LR, weight_decay=0.001, momentum=0.9)
+
+    logger = logging.getLogger(__name__)
+    logger.setLevel(level=logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
     if config.TRAIN.MODELPATH is None:
         now_time = datetime.now()
         loss = ''
         for i in config.TRAIN.LOSS:
             loss = loss + '-' + i
-        savedir = config.SAVEDIR + config.TRAIN.MODELTYPE + loss + '/' + now_time.strftime('%Y%m%d%H%M%S') + '/'
-        log_file = open(savedir + 'log', 'a+')
+        savedir = config.SAVEDIR + 'trained/' + config.TRAIN.MODELTYPE + loss + '/' + now_time.strftime(
+            '%Y%m%d%H%M%S') + '/'
+
+        os.makedirs(savedir)
+        os.makedirs(savedir + 'scripts/')
+
+        handler = logging.FileHandler(savedir + 'log.log')
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(formatter)
+        console = logging.StreamHandler()
+        console.setLevel(logging.INFO)
+        logger.addHandler(handler)
+        logger.addHandler(console)
 
         trained_epoch = 0
         valid_acc = 0.0
-        print('[Message] Create new model.', file=log_file)
-        print('[Message] Create folder {}'.format(savedir), file=log_file)
-        os.makedirs(savedir)
-        os.makedirs(savedir + 'scripts/')
+        logger.info('[Message] Create new model.')
+        logger.info('[Message] Create folder {}'.format(savedir))
     else:
         savedir = config.TRAIN.MODELPATH.rsplit('/', 1)[0] + '/'
-        log_file = open(savedir + 'log', 'a+')
+
+        handler = logging.FileHandler(savedir + 'log.log')
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(formatter)
+        console = logging.StreamHandler()
+        console.setLevel(logging.INFO)
+        logger.addHandler(handler)
+        logger.addHandler(console)
 
         checkpoint = torch.load(config.TRAIN.MODELPATH)
         net.load_state_dict(checkpoint['net'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         trained_epoch = checkpoint['epoch']
         valid_acc = checkpoint['valid_acc']
-        print('[Message] Load Model:{}'.format(config.TRAIN.MODELPATH), file=log_file)
+        logger.info('[Message] Load Model:{}'.format(config.TRAIN.MODELPATH))
 
-    print('[Message] Model type {}'.format(config.TRAIN.MODELTYPE), file=log_file)
-    print('[Message] Save dir {}'.format(savedir), file=log_file)
+    logger.info('[Message] Model type {}'.format(config.TRAIN.MODELTYPE))
+    logger.info('[Message] Save dir {}'.format(savedir))
 
-    return net, trained_epoch, optimizer, valid_acc, savedir
+    return net, trained_epoch, optimizer, valid_acc, savedir, logger
 
 
-def train(net, trained_epoch, optimizer, best_valid_acc, savedir):
-    # open the log file
-    log_file = open(savedir + 'log', 'a+')
-
+def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
     setup_seed(5)
     os.environ['CUDA_VISIBLE_DEVICES'] = config.TRAIN.VISIBLEDEVICES
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     if torch.cuda.device_count() > 1:
-        print('[Message] Multi GPUS:{}'.format(torch.cuda.device_count()), file=log_file)
+        logger.info('[Message] Multi GPUS:{}'.format(torch.cuda.device_count()))
         net = torch.nn.DataParallel(net, device_ids=list(range(torch.cuda.device_count())))
     else:
-        print('[Message] 1 GPU', file=log_file)
+        logger.info('[Message] 1 GPU')
     net.to(device)
 
     # Train dataset and dataloader
-    train_dataset = SpeechDatasetV2(set='train')
+    train_dataset = GoogleSpeechCommandDatasetV2(set='train')
     train_dataloader = DataLoader(train_dataset, batch_size=config.TRAIN.BATCHSIZE, shuffle=True,
                                   num_workers=config.TRAIN.NUMWORKS, pin_memory=True)
 
@@ -111,10 +130,10 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir):
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=config.TRAIN.PATIENCE,
                                                      verbose=True, factor=0.9)
 
-    print('[Train] Batch size {}'.format(config.TRAIN.BATCHSIZE), file=log_file)
-    print('[Train] Start epoch {}'.format(trained_epoch), file=log_file)
-    print('[Train] Patience {}'.format(config.TRAIN.PATIENCE), file=log_file)
-    print('[Train] Init learning Rate {}'.format(config.TRAIN.LR), file=log_file)
+    logger.info('[Train] Batch size {}'.format(config.TRAIN.BATCHSIZE))
+    logger.info('[Train] Start epoch {}'.format(trained_epoch))
+    logger.info('[Train] Patience {}'.format(config.TRAIN.PATIENCE))
+    logger.info('[Train] Init learning Rate {}'.format(config.TRAIN.LR))
 
     # Counter. If valid acc not improve in patience epochs, stop training
     counter = 0
@@ -123,13 +142,13 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir):
 
     for epoch in range(1, config.TRAIN.EPOCH + 1):
         net.train()
-        with tqdm(train_dataloader, desc='Epoch {}'.format(epoch), ncols=200) as t:
+        with tqdm(train_dataloader, desc='Epoch {}'.format(epoch), ncols=100) as t:
             if config.TRAIN.MODE == 'NoText':
                 sum_train_ce_loss = 0
                 start_epoch_time = time.time()
                 for (waveform, target) in t:
                     start_batch_time = time.time()
-                    t.set_description('Epoch {}'.format(epoch))
+                    # t.set_description('Epoch {}'.format(epoch))
 
                     waveform = waveform.type(torch.FloatTensor)
                     waveform, target = waveform.to(device), target.to(device)
@@ -151,8 +170,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir):
                                   lr=optimizer.param_groups[0]['lr'],
                                   time=end_batch_time - start_batch_time)
                 end_epoch_time = time.time()
-                message = '[{}][Train] Epoch:{}, train_ce_loss:{}, lr:{}, train_time(s):{}'.format(
-                    datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
+                message = '[Train] Epoch:{}, train_ce_loss:{:4f}, lr:{}, train_time(s):{:4f}'.format(
                     epoch,
                     sum_train_ce_loss / len(train_dataloader.dataset),
                     optimizer.param_groups[0]['lr'],
@@ -195,8 +213,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir):
                                   lr=optimizer.param_groups[0]['lr'],
                                   time=end_batch_time - start_batch_time)
                 end_epoch_time = time.time()
-                message = '[{}][Train] Epoch:{}, train_ce_loss:{}, train_tri_loss:{}, lr:{}, train_time(s):{}'.format(
-                    datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
+                message = '[Train] Epoch:{}, train_ce_loss:{}, train_tri_loss:{:4f}, lr:{}, train_time(s):{:4f}'.format(
                     epoch,
                     sum_train_ce_loss / len(train_dataloader.dataset),
                     sum_train_tri_loss / len(train_dataloader.dataset),
@@ -239,8 +256,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir):
                                   lr=optimizer.param_groups[0]['lr'],
                                   time=end_batch_time - start_batch_time)
                 end_epoch_time = time.time()
-                message = '[{}][Train] Epoch:{}, train_ce_loss:{}, train_tri_loss:{}, lr:{}, train_time(s):{}'.format(
-                    datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
+                message = '[Train] Epoch:{}, train_ce_loss:{:4f}, train_tri_loss:{:4f}, lr:{}, train_time(s):{:4f}'.format(
                     epoch,
                     sum_train_ce_loss / len(train_dataloader.dataset),
                     sum_train_tri_loss / len(train_dataloader.dataset),
@@ -281,8 +297,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir):
                                   lr=optimizer.param_groups[0]['lr'],
                                   time=end_batch_time - start_batch_time)
                 end_epoch_time = time.time()
-                message = '[{}][Train] Epoch:{}, train_ce_loss:{}, train_cca_loss:{}, lr:{}, train_time(s):{}'.format(
-                    datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
+                message = '[Train] Epoch:{}, train_ce_loss:{:4f}, train_cca_loss:{:4f}, lr:{}, train_time(s):{:4f}'.format(
                     epoch,
                     sum_train_ce_loss / len(train_dataloader.dataset),
                     sum_train_cca_loss / len(train_dataloader.dataset),
@@ -290,9 +305,9 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir):
                     end_epoch_time - start_epoch_time
                 )
 
-        print(message, file=log_file)
+        logger.info(message)
 
-        valid_loss, valid_acc = valid(net, device=device, epoch=epoch, log_file=log_file)
+        valid_loss, valid_acc = valid(net, device=device, epoch=epoch, logger=logger)
         scheduler.step(valid_acc)  # valid acc not increase
 
         # Update best valid models
@@ -312,12 +327,13 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir):
             counter = 0
         else:
             counter = counter + 1
-            print('[Early stopping] {}'.format(counter))
+            logger.info('[Early stopping] {}'.format(counter))
+
             if counter >= config.TRAIN.EARLYSTOP:
-                print('[Message] Early stopping.')
-                print('[Message] Best valid acc {:.4f}\n'.format(best_valid_acc))
+                logger.info('[Message] Early stopping.')
+                logger.info('[Message] Best valid acc {:.4f}\n'.format(best_valid_acc))
                 break
-        print('[Message] Best valid acc {:.4f}\n'.format(best_valid_acc))
+        logger.info('[Message] Best valid acc {:.4f}\n'.format(best_valid_acc))
 
     # save model optimizer and trained epoch
     torch.save(best_state, savedir + 'epoch_{}_valid_loss_{:.4f}_acc_{:2f}.pth'.format(
@@ -335,11 +351,11 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir):
     test_net(best_net, savedir, device, printnet=False)
 
 
-def valid(net, device=None, epoch=1, log_file=None):
+def valid(net, device=None, epoch=1, logger=None):
     net.eval()
-    valid_dataset = SpeechDatasetV2('valid')
+    valid_dataset = GoogleSpeechCommandDatasetV2('valid')
     valid_dataloader = DataLoader(dataset=valid_dataset, batch_size=config.VALID.BATCHSIZE, shuffle=False,
-                                  num_workers=4, drop_last=False)
+                                  num_workers=config.TRAIN.NUMWORKS, drop_last=False)
 
     # losses
     if 'CE' in config.TRAIN.LOSS:
@@ -354,7 +370,7 @@ def valid(net, device=None, epoch=1, log_file=None):
 
     with torch.no_grad():
         net = net.to(device)
-        with tqdm(valid_dataloader, desc='Valid', ncols=200) as t:
+        with tqdm(valid_dataloader, desc='Valid {}'.format(epoch), ncols=100) as t:
             if config.TRAIN.MODE == 'NoText':
                 sum_valid_ce_loss = 0
                 batch_id = 0
@@ -379,13 +395,12 @@ def valid(net, device=None, epoch=1, log_file=None):
                 end_valid_time = time.time()
                 valid_acc = correct / len(valid_dataloader.dataset)
                 valid_loss = sum_valid_ce_loss / len(valid_dataloader.dataset)
-                message = '[{}][Valid] valid_acc:{}, valid_ce_loss:{}, valid_time(s):{}'.format(
-                    datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
+                message = '[Valid] valid_acc:{:4f}, valid_ce_loss:{:4f}, valid_time(s):{:4f}'.format(
                     valid_acc,
                     sum_valid_ce_loss / len(valid_dataloader.dataset),
                     end_valid_time - start_valid_time
                 )
-                print(message, file=log_file)
+                logger.info(message)
                 return valid_loss, valid_acc
 
             elif config.TRAIN.MODE == 'Text':
@@ -424,14 +439,14 @@ def valid(net, device=None, epoch=1, log_file=None):
                 valid_acc = correct / len(valid_dataloader.dataset)
                 valid_loss = sum_valid_ce_loss / len(valid_dataloader.dataset) + \
                              sum_valid_tri_loss / len(valid_dataloader.dataset)
-                message = '[{}][Valid] valid_acc:{}, valid_ce_loss:{}, valid_tri_loss:{}, valid_time(s):{}'.format(
+                message = '[Valid] valid_acc:{:4f}, valid_ce_loss:{:4f}, valid_tri_loss:{:4f}, valid_time(s):{:4f}'.format(
                     datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
                     valid_acc,
                     sum_valid_ce_loss / len(valid_dataloader.dataset),
                     valid_tri_loss / len(valid_dataloader.dataset),
                     end_valid_time - start_valid_time
                 )
-                print(message, file=log_file)
+                logger.info(message)
                 return valid_loss, valid_acc
 
             elif config.TRAIN.MODE == 'TextAnchor':
@@ -469,14 +484,14 @@ def valid(net, device=None, epoch=1, log_file=None):
                 valid_acc = correct / len(valid_dataloader.dataset)
                 valid_loss = sum_valid_ce_loss / len(valid_dataloader.dataset) + \
                              sum_valid_tri_loss / len(valid_dataloader.dataset)
-                message = '[{}][Valid] valid_acc:{}, valid_ce_loss:{}, valid_tri_loss:{}, valid_time(s):{}'.format(
+                message = '[Valid] valid_acc:{:4f}, valid_ce_loss:{:4f}, valid_tri_loss:{:4f}, valid_time(s):{:4f}'.format(
                     datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
                     valid_acc,
                     sum_valid_ce_loss / len(valid_dataloader.dataset),
                     sum_valid_tri_loss / len(valid_dataloader.dataset),
                     end_valid_time - start_valid_time
                 )
-                print(message, file=log_file)
+                logger.info(message)
                 return valid_loss, valid_acc
 
             elif config.TRAIN.MODE == 'CCA':
@@ -512,19 +527,19 @@ def valid(net, device=None, epoch=1, log_file=None):
                 valid_loss = sum_valid_ce_loss / len(valid_dataloader.dataset) + \
                              sum_valid_cca_loss / len(valid_dataloader.dataset)
 
-                message = '[{}][Valid] valid_acc:{}, valid_ce_loss:{}, valid_cca_loss:{}, valid_time(s):{}'.format(
+                message = '[Valid] valid_acc:{:4f}, valid_ce_loss:{:4f}, valid_cca_loss:{:4f}, valid_time(s):{:4f}'.format(
                     datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
                     valid_acc,
                     sum_valid_ce_loss / len(valid_dataloader.dataset),
                     sum_valid_cca_loss / len(valid_dataloader.dataset),
                     end_valid_time - start_valid_time
                 )
-                print(message, file=log_file)
+                logger.info(message)
                 return valid_loss, correct / len(valid_dataloader.dataset)
 
 
 if __name__ == '__main__':
     os.environ['CUDA_VISIBLE_DEVICES'] = config.TRAIN.VISIBLEDEVICES
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    net, trained_epoch, optimizer, valid_acc, savedir = load_model()
-    train(net, trained_epoch, optimizer, valid_acc, savedir)
+    net, trained_epoch, optimizer, valid_acc, savedir, logger = load_model()
+    train(net, trained_epoch, optimizer, valid_acc, savedir, logger)
