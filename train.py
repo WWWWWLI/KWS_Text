@@ -106,8 +106,10 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
     if torch.cuda.device_count() > 1:
         logger.info('[Message] Multi GPUS:{}'.format(torch.cuda.device_count()))
         net = torch.nn.DataParallel(net, device_ids=list(range(torch.cuda.device_count())))
-    else:
+    elif torch.cuda.device_count() == 1:
         logger.info('[Message] 1 GPU')
+    else:
+        logger.info('[Message] CPU')
     net.to(device)
 
     # Train dataset and dataloader
@@ -318,7 +320,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
             best_net = net
             best_valid_model = 'epoch_{}_valid_loss_{:.4f}_acc_{:2f}.pth'.format(best_epoch, best_valid_loss,
                                                                                  best_valid_acc)
-            if torch.cuda.device_count() == 1:
+            if torch.cuda.device_count() == 1 or torch.cuda.device_count() == 0:
                 best_state = {'net': best_net.state_dict(), 'optimizer': optimizer.state_dict(),
                               'epoch': best_epoch}
             else:
@@ -343,7 +345,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
 
     # save model code
     shutil.copy(config.ROOTDIR + 'models/' + config.TRAIN.MODELTYPE + '.py', savedir + 'scripts/')
-    shutil.copy(config.ROOTDIR + 'utils/' + 'dataloader2classes.py', savedir + 'scripts/')
+    shutil.copy(config.ROOTDIR + 'utils/' + 'dataloader.py', savedir + 'scripts/')
     shutil.copy(config.ROOTDIR + 'config.py', savedir + 'scripts/')
     shutil.copy(config.ROOTDIR + 'train.py', savedir + 'scripts/')
     shutil.copy(config.ROOTDIR + 'test.py', savedir + 'scripts/')
@@ -539,7 +541,5 @@ def valid(net, device=None, epoch=1, logger=None):
 
 
 if __name__ == '__main__':
-    os.environ['CUDA_VISIBLE_DEVICES'] = config.TRAIN.VISIBLEDEVICES
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     net, trained_epoch, optimizer, valid_acc, savedir, logger = load_model()
     train(net, trained_epoch, optimizer, valid_acc, savedir, logger)
