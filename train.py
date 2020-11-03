@@ -136,6 +136,9 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
     logger.info('[Train] Patience {}'.format(config.TRAIN.PATIENCE))
     logger.info('[Train] Init learning Rate {}'.format(config.TRAIN.LR))
 
+    if config.TRAIN.MODE != 'NoText':
+        logger.info('[Train] Use text embedding:{}'.format(config.TEXTEMB))
+
     # Counter. If valid acc not improve in patience epochs, stop training
     counter = 0
     best_epoch = 0
@@ -285,8 +288,8 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
                     train_ce_loss = ce_criterion(output, target)
                     train_cca_loss = cca_criterion(audio_embedding, text_embedding)  # * config.TRAIN.BATCHSIZE
                     sum_train_ce_loss = sum_train_ce_loss + train_ce_loss.item() * config.TRAIN.BATCHSIZE
-                    sum_train_cca_loss = sum_train_cca_loss + train_cca_loss
-                    train_loss = train_ce_loss + train_cca_loss
+                    sum_train_cca_loss = sum_train_cca_loss + train_cca_loss * config.TRAIN.BATCHSIZE
+                    train_loss = train_ce_loss + 0.01*train_cca_loss
 
                     train_loss.backward()
                     optimizer.step()
@@ -511,9 +514,9 @@ def valid(net, device=None, epoch=1, logger=None):
                     output, audio_embedding, text_embedding = net(waveform, word_vec)
 
                     valid_ce_loss = ce_criterion(output, target)
-                    valid_cca_loss = cca_criterion(audio_embedding, text_embedding)  # * config.TRAIN.BATCHSIZE
+                    valid_cca_loss = cca_criterion(audio_embedding, text_embedding)
                     sum_valid_ce_loss = sum_valid_ce_loss + valid_ce_loss.item() * config.TRAIN.BATCHSIZE
-                    sum_valid_cca_loss = sum_valid_cca_loss + valid_cca_loss
+                    sum_valid_cca_loss = sum_valid_cca_loss + valid_cca_loss  # * config.TRAIN.BATCHSIZE
 
                     pred = output.max(1, keepdim=True)[1]
                     correct += pred.eq(target.view_as(pred)).sum().item()

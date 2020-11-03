@@ -367,7 +367,7 @@ def test_net(net, savedir, logger, mode):
                     correct += pred.eq(target.view_as(pred)).sum().item()
                     t.set_postfix(acc=correct / batch_id / config.TEST.BATCHSIZE,
                                   test_ce_loss=test_ce_loss.item(),
-                                  test_cca_loss=test_cca_loss.item())
+                                  test_cca_loss=test_cca_loss)
 
                     result = result + cal_nums(output.cpu(), target.cpu(), thresholds)
                 end_test_time = time.time()
