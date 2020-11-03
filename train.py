@@ -143,7 +143,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
 
     for epoch in range(1, config.TRAIN.EPOCH + 1):
         net.train()
-        with tqdm(train_dataloader, desc='Epoch {}'.format(epoch), ncols=100) as t:
+        with tqdm(train_dataloader, desc='Epoch {}'.format(epoch), ncols=150) as t:
             if config.TRAIN.MODE == 'NoText':
                 sum_train_ce_loss = 0
                 start_epoch_time = time.time()
@@ -349,7 +349,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
     shutil.copy(config.ROOTDIR + 'train.py', savedir + 'scripts/')
     shutil.copy(config.ROOTDIR + 'test.py', savedir + 'scripts/')
 
-    test_net(best_net, savedir, logger)
+    test_net(best_net, savedir, logger, config.TRAIN.MODE)
 
 
 def valid(net, device=None, epoch=1, logger=None):
@@ -371,7 +371,7 @@ def valid(net, device=None, epoch=1, logger=None):
 
     with torch.no_grad():
         net = net.to(device)
-        with tqdm(valid_dataloader, desc='Valid {}'.format(epoch), ncols=100) as t:
+        with tqdm(valid_dataloader, desc='Valid {}'.format(epoch), ncols=150) as t:
             if config.TRAIN.MODE == 'NoText':
                 sum_valid_ce_loss = 0
                 batch_id = 0
