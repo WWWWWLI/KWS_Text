@@ -2,7 +2,7 @@
 ########################################################################
 #
 #  Train Keyword Spotting Models
-#
+#  The four modes correspond to the four training modes in dataloader
 #  Author: Li Wang (1901213145@pku.edu.cn)
 #
 #  Date: 8 Sep, 2020
