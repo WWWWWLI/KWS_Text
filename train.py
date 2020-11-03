@@ -15,7 +15,6 @@ import torch.nn as nn
 from torch import optim
 from utils.dataloader import GoogleSpeechCommandDatasetV2
 from torch.utils.data import DataLoader
-from torchsummaryX import summary
 import random
 import numpy as np
 import models
@@ -126,7 +125,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
         tri_criterion = nn.TripletMarginLoss()
     if 'CCA' in config.TRAIN.LOSS:
         # CCA loss
-        cca_criterion = cca_loss(outdim_size=64, use_all_singular_values=False, device=device).loss
+        cca_criterion = cca_loss(outdim_size=config.CCA.OUTDIM, use_all_singular_values=False, device=device).loss
 
     # optimizer
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', patience=config.TRAIN.PATIENCE,
@@ -442,7 +441,6 @@ def valid(net, device=None, epoch=1, logger=None):
                 valid_loss = sum_valid_ce_loss / len(valid_dataloader.dataset) + \
                              sum_valid_tri_loss / len(valid_dataloader.dataset)
                 message = '[Valid] valid_acc:{:4f}, valid_ce_loss:{:4f}, valid_tri_loss:{:4f}, valid_time(s):{:4f}'.format(
-                    datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
                     valid_acc,
                     sum_valid_ce_loss / len(valid_dataloader.dataset),
                     valid_tri_loss / len(valid_dataloader.dataset),
@@ -521,7 +519,7 @@ def valid(net, device=None, epoch=1, logger=None):
                     pred = output.max(1, keepdim=True)[1]
                     correct += pred.eq(target.view_as(pred)).sum().item()
                     t.set_postfix(valid_ce_loss=valid_ce_loss.item(),
-                                  valid_tri_loss=valid_cca_loss,
+                                  valid_cca_loss=valid_cca_loss,
                                   acc=correct / batch_id / config.VALID.BATCHSIZE)
                 end_valid_time = time.time()
 
