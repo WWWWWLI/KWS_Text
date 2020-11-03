@@ -84,7 +84,7 @@ class GoogleSpeechCommandDatasetV2(Dataset):
         elif self.mode == 'Text':
             waveform, _ = torchaudio.load(self.dataset_path + self.y_data[i] + '/' + self.x_data[i])
             waveform = self.normalize(waveform)
-            waveform = self.normalize(waveform)
+            waveform = self.padding(waveform)
             label_num = self.class_to_num(self.y_data[i])
             match_word = self.y_data[i]
             unmatch_word = choice(self.all_words)
@@ -110,7 +110,7 @@ class GoogleSpeechCommandDatasetV2(Dataset):
         elif self.mode == 'CCA':
             waveform, _ = torchaudio.load(self.dataset_path + self.y_data[i] + '/' + self.x_data[i])
             waveform = self.normalize(waveform)
-            waveform = self.normalize(waveform)
+            waveform = self.padding(waveform)
             label_num = self.class_to_num(self.y_data[i])
             word = self.y_data[i]
             word_vec = self.text_emb[word]
