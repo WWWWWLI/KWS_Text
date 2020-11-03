@@ -36,13 +36,13 @@ def setup_seed(seed):
 
 
 def load_model():
-    net = getattr(models, config.TRAIN.MODELTYPE)(num_class=config.NumClasses)
+    net = getattr(models, config.TEST.MODELTYPE)(num_class=config.NumClasses)
     logger = logging.getLogger(__name__)
     logger.setLevel(level=logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     if os.path.exists(config.TEST.MODELPATH):
-        savedir = config.TRAIN.MODELPATH.rsplit('/', 1)[0] + '/'
+        savedir = config.TEST.MODELPATH.rsplit('/', 1)[0] + '/'
 
         handler = logging.FileHandler(savedir + 'log.log')
         handler.setLevel(logging.INFO)
@@ -158,7 +158,7 @@ def find_close(arr, e):
     return arr[idx], idx
 
 
-def test_net(net, savedir, logger):
+def test_net(net, savedir, logger, mode):
     net.eval()
     setup_seed(5)
     os.environ['CUDA_VISIBLE_DEVICES'] = config.TEST.VISIBLEDEVICES
@@ -195,8 +195,8 @@ def test_net(net, savedir, logger):
         thresholds = thresholds.tolist()
         result = np.zeros((len(thresholds), len(classes), 4))  # TP + FP + FN + TN
 
-        with tqdm(test_dataloader, desc='Test', ncols=100) as t:
-            if config.TEST.MODE == 'NoText':
+        with tqdm(test_dataloader, desc='Test', ncols=150) as t:
+            if mode == 'NoText':
                 sum_test_ce_loss = 0
                 batch_id = 0
                 correct = 0
@@ -236,7 +236,7 @@ def test_net(net, savedir, logger):
                 )
                 logger.info(message)
 
-            elif config.TEST.MODE == 'Text':
+            elif mode == 'Text':
                 sum_test_ce_loss = 0
                 sum_test_tri_loss = 0
                 batch_id = 0
@@ -285,7 +285,7 @@ def test_net(net, savedir, logger):
                 )
                 logger.info(message)
 
-            elif config.TEST.MODE == 'TextAnchor':
+            elif mode == 'TextAnchor':
                 sum_test_ce_loss = 0
                 sum_test_tri_loss = 0
                 batch_id = 0
@@ -334,7 +334,7 @@ def test_net(net, savedir, logger):
                 )
                 logger.info(message)
 
-            elif config.TEST.MODE == 'CCA':
+            elif mode == 'CCA':
                 sum_test_ce_loss = 0
                 sum_test_cca_loss = 0
                 batch_id = 0
@@ -440,3 +440,8 @@ def test_net(net, savedir, logger):
         plt.show()
         plt.savefig(savedir + '/DET.png')
         logger.info('[Message] Success save DET.png at :{}'.format(savedir))
+
+
+if __name__ == '__main__':
+    net, savedir, logger = load_model()
+    test_net(net, savedir, logger, config.TEST.MODE)
