@@ -36,13 +36,14 @@ class GoogleSpeechCommandDataset(Dataset):
     def __init__(self, set='train'):
         if config.DATASET == 'GSCDV2':
             self.commands = ['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go',
-                         'backward', 'forward', 'follow', 'learn']
-            self.unknow_words = ["bed", "bird", "cat", "dog", "happy", "house", "marvin", "sheila", "tree", "wow", 'visual',
-                             'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+                             'backward', 'forward', 'follow', 'learn']
+            self.unknow_words = ["bed", "bird", "cat", "dog", "happy", "house", "marvin", "sheila", "tree", "wow",
+                                 'visual',
+                                 'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
             self.all_words = ['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go',
-                          'backward', 'forward', 'follow', 'learn', "bed", "bird", "cat", "dog", "happy", "house",
-                          "marvin", "sheila", "tree", "wow", 'visual',
-                          'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+                              'backward', 'forward', 'follow', 'learn', "bed", "bird", "cat", "dog", "happy", "house",
+                              "marvin", "sheila", "tree", "wow", 'visual',
+                              'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
             self.train_file = config.TRAIN.TRAINFILEV2
             self.valid_file = config.TRAIN.VALIDFILEV2
             self.test_file = config.TEST.TESTFILEV2
@@ -177,7 +178,7 @@ if __name__ == '__main__':
 
     os.environ['CUDA_VISIBLE_DEVICES'] = "0"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dataset = GoogleSpeechCommandDatasetV2('valid')
+    dataset = GoogleSpeechCommandDataset('valid')
     dataloader = DataLoader(dataset, batch_size=256, shuffle=True, num_workers=4)
     for data in dataloader:
         # start = time.time()
