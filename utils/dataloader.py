@@ -32,32 +32,53 @@ from torch.utils.data import DataLoader
 from prefetch_generator import BackgroundGenerator
 
 
-class GoogleSpeechCommandDatasetV2(Dataset):
+class GoogleSpeechCommandDataset(Dataset):
     def __init__(self, set='train'):
-        self.commands = ['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go',
+        if config.DATASET == 'GSCDV2':
+            self.commands = ['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go',
                          'backward', 'forward', 'follow', 'learn']
-        self.unknow_words = ["bed", "bird", "cat", "dog", "happy", "house", "marvin", "sheila", "tree", "wow", 'visual',
+            self.unknow_words = ["bed", "bird", "cat", "dog", "happy", "house", "marvin", "sheila", "tree", "wow", 'visual',
                              'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
-        self.all_words = ['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go',
+            self.all_words = ['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go',
                           'backward', 'forward', 'follow', 'learn', "bed", "bird", "cat", "dog", "happy", "house",
                           "marvin", "sheila", "tree", "wow", 'visual',
                           'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
-        self.train_file = config.TRAIN.TRAINFILE
-        self.valid_file = config.TRAIN.VALIDFILE
-        self.test_file = config.TEST.TESTFILE
+            self.train_file = config.TRAIN.TRAINFILEV2
+            self.valid_file = config.TRAIN.VALIDFILEV2
+            self.test_file = config.TEST.TESTFILEV2
+            if set == 'train':
+                self.dataset_path = config.TRAIN.DATASETPATHV2
+                self.file = self.train_file
+            elif set == 'valid':
+                self.dataset_path = config.TRAIN.DATASETPATHV2
+                self.file = self.valid_file
+            elif set == 'test':
+                self.dataset_path = config.TEST.DATASETPATHV2
+                self.file = self.test_file
+            else:
+                print('SpeechDatasetV2 set error!')
+        elif config.DATASET == 'GSCDV1':
+            self.commands = ['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go']
+            self.unknow_words = ["bed", "bird", "cat", "dog", "happy", "house", "marvin", "sheila", "tree", "wow",
+                                 'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+            self.train_file = config.TRAIN.TRAINFILEV1
+            self.valid_file = config.TRAIN.VALIDFILEV1
+            self.test_file = config.TEST.TESTFILEV1
+            if set == 'train':
+                self.dataset_path = config.TRAIN.DATASETPATHV1
+                self.file = self.train_file
+            elif set == 'valid':
+                self.dataset_path = config.TRAIN.DATASETPATHV1
+                self.file = self.valid_file
+            elif set == 'test':
+                self.dataset_path = config.TEST.DATASETPATHV1
+                self.file = self.test_file
+            else:
+                print('SpeechDatasetV1 set error!')
+
         self.data = []
-        self.num_classes = len(self.commands) + 1
-        if set == 'train':
-            self.dataset_path = config.TRAIN.DATASETPATH
-            self.file = self.train_file
-        elif set == 'valid':
-            self.dataset_path = config.TRAIN.DATASETPATH
-            self.file = self.valid_file
-        elif set == 'test':
-            self.dataset_path = config.TEST.DATASETPATH
-            self.file = self.test_file
-        else:
-            print('SpeechDatasetV2 set error!')
+        self.num_classes = config.NumClasses
+
         with open(self.file, 'r') as f:
             for line in f.readlines():
                 self.data.append(line.strip('\n').split('/', 1))
