@@ -98,7 +98,7 @@ def load_model():
 
 
 def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
-    setup_seed(5)
+    setup_seed(config.SEED)
     os.environ['CUDA_VISIBLE_DEVICES'] = config.TRAIN.VISIBLEDEVICES
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
