@@ -357,7 +357,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
 
 def valid(net, device=None, epoch=1, logger=None):
     net.eval()
-    valid_dataset = GoogleSpeechCommandDatasetV2('valid')
+    valid_dataset = GoogleSpeechCommandDataset('valid')
     valid_dataloader = DataLoader(dataset=valid_dataset, batch_size=config.VALID.BATCHSIZE, shuffle=False,
                                   num_workers=config.TRAIN.NUMWORKS, drop_last=False)
 
