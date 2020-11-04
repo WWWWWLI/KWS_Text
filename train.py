@@ -43,7 +43,7 @@ def setup_seed(seed):
 
 def load_model():
     # create or load the model
-    net = getattr(models, config.TRAIN.MODELTYPE)(num_class=config.NumClasses)
+    net = getattr(models, config.TRAIN.MODELTYPE)()
     optimizer = optim.SGD(net.parameters(), lr=config.TRAIN.LR, weight_decay=0.001, momentum=0.9)
 
     logger = logging.getLogger(__name__)
