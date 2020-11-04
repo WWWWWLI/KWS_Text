@@ -55,7 +55,7 @@ def load_model():
         loss = ''
         for i in config.TRAIN.LOSS:
             loss = loss + '-' + i
-        savedir = config.SAVEDIR + 'trained/' + config.TRAIN.MODELTYPE + loss + '/' + now_time.strftime(
+        savedir = config.SAVEDIR + 'trained/' + config.DATASET + '/' + config.TRAIN.MODELTYPE + loss + '/' + now_time.strftime(
             '%Y%m%d%H%M%S') + '/'
 
         os.makedirs(savedir)
@@ -289,7 +289,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
                     train_cca_loss = cca_criterion(audio_embedding, text_embedding)  # * config.TRAIN.BATCHSIZE
                     sum_train_ce_loss = sum_train_ce_loss + train_ce_loss.item() * config.TRAIN.BATCHSIZE
                     sum_train_cca_loss = sum_train_cca_loss + train_cca_loss * config.TRAIN.BATCHSIZE
-                    train_loss = train_ce_loss + 0.01*train_cca_loss
+                    train_loss = train_ce_loss + 0.01 * train_cca_loss
 
                     train_loss.backward()
                     optimizer.step()
