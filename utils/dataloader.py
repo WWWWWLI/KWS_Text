@@ -189,4 +189,4 @@ if __name__ == '__main__':
         # print('Running time: %s Seconds' % (end - start))
         print(waveform.size())
         # print(labels.size())
-        # print(labels)
+        print(labels, flush=True)
