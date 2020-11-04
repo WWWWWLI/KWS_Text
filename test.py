@@ -25,6 +25,7 @@ import torch.nn as nn
 import logging
 from utils.cca_loss import cca_loss
 import time
+from sklearn.metrics import auc
 
 
 def setup_seed(seed):
@@ -36,7 +37,7 @@ def setup_seed(seed):
 
 
 def load_model():
-    net = getattr(models, config.TEST.MODELTYPE)(num_class=config.NumClasses)
+    net = getattr(models, config.TEST.MODELTYPE)()
     logger = logging.getLogger(__name__)
     logger.setLevel(level=logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -160,7 +161,7 @@ def find_close(arr, e):
 
 def test_net(net, savedir, logger, mode):
     net.eval()
-    setup_seed(5)
+    setup_seed(config.SEED)
     os.environ['CUDA_VISIBLE_DEVICES'] = config.TEST.VISIBLEDEVICES
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -187,8 +188,8 @@ def test_net(net, savedir, logger, mode):
 
     with torch.no_grad():
         net = net.to(device)
-        classes = ['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go',
-                   'backward', 'forward', 'follow', 'learn', '_unknown_']
+        classes = test_dataset.commands
+        classes.append('_unknown_')
         # thresholds = np.concatenate(
         #     (np.linspace(0.0, 0.2, 1000), np.linspace(0.2, 0.8, 500), np.linspace(0.8, 1.0, 1000)))
         thresholds = np.linspace(0.0, 1.0, 100)
@@ -381,17 +382,17 @@ def test_net(net, savedir, logger, mode):
                 )
                 logger.info(message)
 
-        logger.info('Test set: Accuracy: {}/{} ({:.2f}%)\n'.format(correct, len(test_dataloader.dataset),
+        logger.info('[Test] Accuracy: {}/{} ({:.2f}%)\n'.format(correct, len(test_dataloader.dataset),
+                                                                100. * correct / len(test_dataloader.dataset)))
+        acc_file.write('[Test] Accuracy: {}/{} ({:.2f}%)\n'.format(correct, len(test_dataloader.dataset),
                                                                    100. * correct / len(test_dataloader.dataset)))
-        acc_file.write('Test set: Accuracy: {}/{} ({:.2f}%)\n'.format(correct, len(test_dataloader.dataset),
-                                                                      100. * correct / len(test_dataloader.dataset)))
         unknown_index = classes.index('_unknown_')
-        logger.info('Test set: Accuracy without unknown: {}/{} ({:.2f}%)\n'
+        logger.info('[Test] Accuracy without unknown: {}/{} ({:.2f}%)\n'
                     .format(correct - class_correct[unknown_index],
                             len(test_dataloader.dataset) - class_total[unknown_index],
                             100. * (correct - class_correct[unknown_index])
                             / (len(test_dataloader.dataset) - class_total[unknown_index])))
-        acc_file.write('Test set: Accuracy without unknow: {}/{} ({:.2f}%)\n'
+        acc_file.write('[Test] Accuracy without unknow: {}/{} ({:.2f}%)\n'
                        .format(correct - class_correct[unknown_index],
                                len(test_dataloader.dataset) - class_total[unknown_index],
                                100. * (correct - class_correct[unknown_index])
@@ -399,17 +400,21 @@ def test_net(net, savedir, logger, mode):
 
         for i in range(config.NumClasses):
             if class_total[i] == 0:
-                logger.info('Accuracy of {} : {:.2f}% ({}/{})'.format(classes[i], 100 * class_correct[i],
-                                                                      int(class_correct[i]), int(class_total[i])))
-                acc_file.write('Accuracy of {} : {:.2f}% ({}/{})\n'.format(classes[i], 100 * class_correct[i],
-                                                                           int(class_correct[i]), int(class_total[i])))
+                logger.info('[Test] Accuracy of {} : {:.2f}% ({}/{})'.format(classes[i], 100 * class_correct[i],
+                                                                             int(class_correct[i]),
+                                                                             int(class_total[i])))
+                acc_file.write('[Test] Accuracy of {} : {:.2f}% ({}/{})\n'.format(classes[i], 100 * class_correct[i],
+                                                                                  int(class_correct[i]),
+                                                                                  int(class_total[i])))
             else:
                 logger.info(
-                    'Accuracy of {} : {:.2f}% ({}/{})'.format(classes[i], 100 * class_correct[i] / class_total[i],
-                                                              int(class_correct[i]), int(class_total[i])))
+                    '[Test] Accuracy of {} : {:.2f}% ({}/{})'.format(classes[i],
+                                                                     100 * class_correct[i] / class_total[i],
+                                                                     int(class_correct[i]), int(class_total[i])))
                 acc_file.write(
-                    'Accuracy of {} : {:.2f}% ({}/{})\n'.format(classes[i], 100 * class_correct[i] / class_total[i],
-                                                                int(class_correct[i]), int(class_total[i])))
+                    '[Test] Accuracy of {} : {:.2f}% ({}/{})\n'.format(classes[i],
+                                                                       100 * class_correct[i] / class_total[i],
+                                                                       int(class_correct[i]), int(class_total[i])))
 
         TPR, TNR, FNR, FPR = cal_rates(result)
         TPR = np.mean(TPR, 1)
@@ -417,11 +422,16 @@ def test_net(net, savedir, logger, mode):
         FNR = np.mean(FNR, 1)
         FPR = np.mean(FPR, 1)
 
+        AUC = auc(FPR, TPR)
+        logger.info('[Test] AUC:{}'.format(AUC))
+        acc_file.write('[Test] AUC:{}'.format(AUC))
+
         test_result = {}
         test_result['FPR'] = FPR
         test_result['FNR'] = FNR
         test_result['TPR'] = TPR
         test_result['TNR'] = TNR
+        test_result['AUC'] = AUC
 
         if os.path.exists(savedir + '/test_result.npy'):
             # Delete if test_result.npy already exists
@@ -430,7 +440,7 @@ def test_net(net, savedir, logger, mode):
 
         acc_file.close()
 
-        plt.plot(FPR, FNR, label=config.TRAIN.MODELTYPE)
+        plt.plot(FPR, FNR, label=config.TEST.MODELTYPE)
         plt.legend()
         plt.xlabel('False Alarm Rate')
         plt.ylabel('False Reject Rate')
@@ -439,7 +449,7 @@ def test_net(net, savedir, logger, mode):
         plt.title('DET')
         plt.show()
         plt.savefig(savedir + '/DET.png')
-        logger.info('[Message] Success save DET.png at :{}'.format(savedir))
+        logger.info('[Test] Success save DET.png at :{}'.format(savedir))
 
 
 if __name__ == '__main__':
