@@ -13,7 +13,7 @@
 import torch
 import torch.nn as nn
 from torch import optim
-from utils.dataloader import GoogleSpeechCommandDatasetV2
+from utils.dataloader import GoogleSpeechCommandDataset
 from torch.utils.data import DataLoader
 import random
 import numpy as np
@@ -112,7 +112,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
     net.to(device)
 
     # Train dataset and dataloader
-    train_dataset = GoogleSpeechCommandDatasetV2(set='train')
+    train_dataset = GoogleSpeechCommandDataset(set='train')
     train_dataloader = DataLoader(train_dataset, batch_size=config.TRAIN.BATCHSIZE, shuffle=True,
                                   num_workers=config.TRAIN.NUMWORKS, pin_memory=True)
 

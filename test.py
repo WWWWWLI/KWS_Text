@@ -10,7 +10,7 @@
 ########################################################################
 
 import torch
-from utils.dataloader import GoogleSpeechCommandDatasetV2
+from utils.dataloader import GoogleSpeechCommandDataset
 from torch.utils.data import DataLoader
 import os
 import numpy as np
@@ -164,7 +164,7 @@ def test_net(net, savedir, logger, mode):
     os.environ['CUDA_VISIBLE_DEVICES'] = config.TEST.VISIBLEDEVICES
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    test_dataset = GoogleSpeechCommandDatasetV2(set='test')
+    test_dataset = GoogleSpeechCommandDataset(set='test')
     test_dataloader = DataLoader(dataset=test_dataset, batch_size=config.TEST.BATCHSIZE, shuffle=False, num_workers=4,
                                  drop_last=False)
 
