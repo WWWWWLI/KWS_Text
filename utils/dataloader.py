@@ -62,6 +62,9 @@ class GoogleSpeechCommandDataset(Dataset):
             self.commands = ['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go']
             self.unknow_words = ["bed", "bird", "cat", "dog", "happy", "house", "marvin", "sheila", "tree", "wow",
                                  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
+            self.all_words = ['yes', 'no', 'up', 'down', 'left', 'right', 'on', 'off', 'stop', 'go', "bed", "bird",
+                              "cat", "dog", "happy", "house", "marvin", "sheila", "tree", "wow",
+                              'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
             self.train_file = config.TRAIN.TRAINFILEV1
             self.valid_file = config.TRAIN.VALIDFILEV1
             self.test_file = config.TEST.TESTFILEV1
