@@ -108,8 +108,8 @@ def cal_nums(output, target, thres):
                     else:
                         FN += 1
             if TP + FP + FN + TN != output.shape[0]:
-                print('[Error] Calculate TP FP FN TN wrong!')
-                exit()
+                print('[Error] Calculate TP FP FN TN wrong!', flush=True)
+                exit(1)
 
             result[i, n, 0] = TP
             result[i, n, 1] = FP
