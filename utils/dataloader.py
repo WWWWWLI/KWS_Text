@@ -96,7 +96,7 @@ class GoogleSpeechCommandDataset(Dataset):
         else:
             print('[ERROR] Wrong SET!')
             exit(1)
-        if self.mode != 'NoText':
+        if self.mode == 'Text' or self.mode == 'TextAnchor' or self.mode == 'CCA':
             self.text_emb = np.load(config.TEXTEMB, allow_pickle=True).item()
 
     def __getitem__(self, i):
@@ -140,6 +140,26 @@ class GoogleSpeechCommandDataset(Dataset):
             word = self.y_data[i]
             word_vec = self.text_emb[word]
             return waveform, word_vec, label_num
+        elif self.mode == 'ThreeAudios':
+            anchor_waveform, _ = torchaudio.load(self.dataset_path + self.y_data[i] + '/' + self.x_data[i])
+            anchor_waveform = self.normalize(anchor_waveform)
+            anchor_waveform = self.padding(anchor_waveform)
+            anchor_label_num = self.class_to_num(self.y_data[i])
+
+            pos_index = choice(range(self.num_data))
+            while self.y_data[i] != self.y_data[pos_index]:
+                pos_index = choice(range(self.num_data))
+            pos_waveform, _ = torchaudio.load(self.dataset_path + self.y_data[pos_index] + '/' + self.x_data[pos_index])
+            pos_waveform = self.normalize(pos_waveform)
+            pos_waveform = self.padding(pos_waveform)
+
+            neg_index = choice(range(self.num_data))
+            while self.y_data[i] == self.y_data[neg_index]:
+                neg_index = choice(range(self.num_data))
+            neg_waveform, _ = torchaudio.load(self.dataset_path + self.y_data[neg_index] + '/' + self.x_data[neg_index])
+            neg_waveform = self.normalize(neg_waveform)
+            neg_waveform = self.padding(neg_waveform)
+            return anchor_waveform, pos_waveform, neg_waveform, anchor_label_num
         else:
             print('[ERROR] Wrong MODE!')
             exit(1)

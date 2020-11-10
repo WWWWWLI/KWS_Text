@@ -382,6 +382,57 @@ def test_net(net, savedir, logger, mode):
                 )
                 logger.info(message)
 
+            elif mode == 'ThreeAudios':
+                net.eval()
+                sum_test_ce_loss = 0
+                sum_test_tri_loss = 0
+                batch_id = 0
+                correct = 0
+                start_test_time = time.time()
+                for (anchor_waveform, pos_waveform, neg_waveform, anchor_label_num) in t:
+                    batch_id += 1
+                    anchor_waveform = anchor_waveform.type(torch.FloatTensor)
+                    pos_waveform = pos_waveform.type(torch.FloatTensor)
+                    neg_waveform = neg_waveform.type(torch.FloatTensor)
+                    anchor_waveform = anchor_waveform.to(device)
+                    pos_waveform = pos_waveform.to(device)
+                    neg_waveform = neg_waveform.to(device)
+                    anchor_label_num = anchor_label_num.to(device)
+
+                    anchor_output, audio_embedding_anchor, audio_embedding_pos, audio_embedding_neg = net(
+                        anchor_waveform, pos_waveform, neg_waveform)
+
+                    test_ce_loss = ce_criterion(anchor_output, anchor_label_num)
+                    test_tri_loss = tri_criterion(audio_embedding_anchor, audio_embedding_pos, audio_embedding_neg)
+                    sum_test_ce_loss = sum_test_ce_loss + test_ce_loss.item() * config.TEST.BATCHSIZE
+                    sum_test_tri_loss = sum_test_tri_loss + test_tri_loss.item() * config.TEST.BATCHSIZE
+
+                    pred = anchor_output.max(1, keepdim=True)[1]
+                    _, predicted = torch.max(anchor_output, 1)
+                    c = (predicted == anchor_label_num).squeeze()
+                    for i in range(config.TEST.BATCHSIZE):
+                        tar = anchor_label_num[i]
+                        class_correct[tar] += c[i].item()
+                        class_total[tar] += 1
+
+                    correct += pred.eq(anchor_label_num.view_as(pred)).sum().item()
+                    t.set_postfix(acc=correct / batch_id / config.TEST.BATCHSIZE,
+                                  test_ce_loss=test_ce_loss.item(),
+                                  test_tri_loss=test_tri_loss.item())
+
+                    result = result + cal_nums(anchor_output.cpu(), anchor_label_num.cpu(), thresholds)
+                end_test_time = time.time()
+                test_acc = correct / len(test_dataloader.dataset)
+
+                message = '[Test] test_acc:{:4f}, test_ce_loss:{:4f}, test_tri_loss:{:4f}, test_time(s):{:4f}'.format(
+                    test_acc,
+                    sum_test_ce_loss / len(test_dataloader.dataset),
+                    test_tri_loss / len(test_dataloader.dataset),
+                    end_test_time - start_test_time
+                )
+                logger.info(message)
+
+
         logger.info('[Test] Accuracy: {}/{} ({:.2f}%)\n'.format(correct, len(test_dataloader.dataset),
                                                                 100. * correct / len(test_dataloader.dataset)))
         acc_file.write('[Test] Accuracy: {}/{} ({:.2f}%)\n'.format(correct, len(test_dataloader.dataset),

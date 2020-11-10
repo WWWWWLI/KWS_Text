@@ -136,7 +136,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
     logger.info('[Train] Patience {}'.format(config.TRAIN.PATIENCE))
     logger.info('[Train] Init learning Rate {}'.format(config.TRAIN.LR))
 
-    if config.TRAIN.MODE != 'NoText':
+    if config.TRAIN.MODE == 'Text' or config.TRAIN.MODE == 'TextAnchor' or config.TRAIN.MODE == 'CCA':
         logger.info('[Train] Use text embedding:{}'.format(config.TEXTEMB))
 
     # Counter. If valid acc not improve in patience epochs, stop training
@@ -172,7 +172,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
 
                     t.set_postfix(train_ce_loss=train_ce_loss.item(),
                                   lr=optimizer.param_groups[0]['lr'],
-                                  time=end_batch_time - start_batch_time)
+                                  time_batch=end_batch_time - start_batch_time)
                 end_epoch_time = time.time()
                 message = '[Train] Epoch:{}, train_ce_loss:{:4f}, lr:{}, train_time(s):{:4f}'.format(
                     epoch,
@@ -215,7 +215,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
                     t.set_postfix(train_ce_loss=train_ce_loss.item(),
                                   train_tri_loss=train_tri_loss.item(),
                                   lr=optimizer.param_groups[0]['lr'],
-                                  time=end_batch_time - start_batch_time)
+                                  time_batch=end_batch_time - start_batch_time)
                 end_epoch_time = time.time()
                 message = '[Train] Epoch:{}, train_ce_loss:{}, train_tri_loss:{:4f}, lr:{}, train_time(s):{:4f}'.format(
                     epoch,
@@ -230,7 +230,6 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
                 start_epoch_time = time.time()
                 for (pos_waveform, neg_waveform, pos_word_vec, pos_label) in t:
                     start_batch_time = time.time()
-                    t.set_description('Epoch {}'.format(epoch))
 
                     pos_waveform = pos_waveform.type(torch.FloatTensor)
                     neg_waveform = neg_waveform.type(torch.FloatTensor)
@@ -258,7 +257,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
                     t.set_postfix(train_ce_loss=train_ce_loss.item(),
                                   train_tri_loss=train_tri_loss.item(),
                                   lr=optimizer.param_groups[0]['lr'],
-                                  time=end_batch_time - start_batch_time)
+                                  time_batch=end_batch_time - start_batch_time)
                 end_epoch_time = time.time()
                 message = '[Train] Epoch:{}, train_ce_loss:{:4f}, train_tri_loss:{:4f}, lr:{}, train_time(s):{:4f}'.format(
                     epoch,
@@ -299,12 +298,55 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
                     t.set_postfix(train_ce_loss=train_ce_loss.item(),
                                   train_cca_loss=train_cca_loss.item(),
                                   lr=optimizer.param_groups[0]['lr'],
-                                  time=end_batch_time - start_batch_time)
+                                  time_batch=end_batch_time - start_batch_time)
                 end_epoch_time = time.time()
                 message = '[Train] Epoch:{}, train_ce_loss:{:4f}, train_cca_loss:{:4f}, lr:{}, train_time(s):{:4f}'.format(
                     epoch,
                     sum_train_ce_loss / len(train_dataloader.dataset),
                     sum_train_cca_loss / len(train_dataloader.dataset),
+                    optimizer.param_groups[0]['lr'],
+                    end_epoch_time - start_epoch_time
+                )
+            elif config.TRAIN.MODE == 'ThreeAudios':
+                sum_train_ce_loss = 0
+                sum_train_tri_loss = 0
+                start_epoch_time = time.time()
+                for (anchor_waveform, pos_waveform, neg_waveform, anchor_label_num) in t:
+                    start_batch_time = time.time()
+
+                    anchor_waveform = anchor_waveform.type(torch.FloatTensor)
+                    pos_waveform = pos_waveform.type(torch.FloatTensor)
+                    neg_waveform = neg_waveform.type(torch.FloatTensor)
+                    anchor_waveform = anchor_waveform.to(device)
+                    pos_waveform = pos_waveform.to(device)
+                    neg_waveform = neg_waveform.to(device)
+                    anchor_label_num = anchor_label_num.to(device)
+
+                    optimizer.zero_grad()
+
+                    anchor_output, audio_embedding_anchor, audio_embedding_pos, audio_embedding_neg = net(
+                        anchor_waveform, pos_waveform, neg_waveform)
+
+                    train_ce_loss = ce_criterion(anchor_output, anchor_label_num)
+                    train_tri_loss = tri_criterion(audio_embedding_anchor, audio_embedding_pos, audio_embedding_neg)
+                    sum_train_ce_loss = sum_train_ce_loss + train_ce_loss.item() * config.TRAIN.BATCHSIZE
+                    sum_train_tri_loss = sum_train_tri_loss + train_tri_loss.item() * config.TRAIN.BATCHSIZE
+                    train_loss = 0.5 * train_ce_loss + 0.5 * train_tri_loss
+
+                    train_loss.backward()
+                    optimizer.step()
+
+                    end_batch_time = time.time()
+
+                    t.set_postfix(train_ce_loss=train_ce_loss.item(),
+                                  train_tri_loss=train_tri_loss.item(),
+                                  lr=optimizer.param_groups[0]['lr'],
+                                  time_batch=end_batch_time - start_batch_time)
+                end_epoch_time = time.time()
+                message = '[Train] Epoch:{}, train_ce_loss:{:4f}, train_tri_loss:{:4f}, lr:{}, train_time(s):{:4f}'.format(
+                    epoch,
+                    sum_train_ce_loss / len(train_dataloader.dataset),
+                    sum_train_tri_loss / len(train_dataloader.dataset),
                     optimizer.param_groups[0]['lr'],
                     end_epoch_time - start_epoch_time
                 )
@@ -537,6 +579,52 @@ def valid(net, device=None, epoch=1, logger=None):
                 )
                 logger.info(message)
                 return valid_loss, correct / len(valid_dataloader.dataset)
+
+            elif config.TRAIN.MODE == 'ThreeAudios':
+                net.eval()
+                sum_valid_ce_loss = 0
+                sum_valid_tri_loss = 0
+                batch_id = 0
+                correct = 0
+                start_valid_time = time.time()
+                for (anchor_waveform, pos_waveform, neg_waveform, anchor_label_num) in t:
+                    batch_id += 1
+                    anchor_waveform = anchor_waveform.type(torch.FloatTensor)
+                    pos_waveform = pos_waveform.type(torch.FloatTensor)
+                    neg_waveform = neg_waveform.type(torch.FloatTensor)
+                    anchor_waveform = anchor_waveform.to(device)
+                    pos_waveform = pos_waveform.to(device)
+                    neg_waveform = neg_waveform.to(device)
+                    anchor_label_num = anchor_label_num.to(device)
+
+                    anchor_output, audio_embedding_anchor, audio_embedding_pos, audio_embedding_neg = net(
+                        anchor_waveform, pos_waveform, neg_waveform)
+
+                    valid_ce_loss = ce_criterion(anchor_output, anchor_label_num)
+                    valid_tri_loss = tri_criterion(audio_embedding_anchor, audio_embedding_pos, audio_embedding_neg)
+                    sum_valid_ce_loss = sum_valid_ce_loss + valid_ce_loss.item() * config.TRAIN.BATCHSIZE
+                    sum_valid_tri_loss = sum_valid_tri_loss + valid_tri_loss.item() * config.TRAIN.BATCHSIZE
+
+                    pred = anchor_output.max(1, keepdim=True)[1]
+                    correct += pred.eq(anchor_label_num.view_as(pred)).sum().item()
+
+                    t.set_postfix(valid_ce_loss=valid_ce_loss.item(),
+                                  valid_tri_loss=valid_tri_loss.item(),
+                                  acc=correct / batch_id / config.VALID.BATCHSIZE)
+
+                end_valid_time = time.time()
+                valid_acc = correct / len(valid_dataloader.dataset)
+                valid_loss = sum_valid_ce_loss / len(valid_dataloader.dataset) + \
+                             sum_valid_tri_loss / len(valid_dataloader.dataset)
+                message = '[Valid] valid_acc:{:4f}, valid_ce_loss:{:4f}, valid_tri_loss:{:4f}, valid_time(s):{:4f}'.format(
+                    valid_acc,
+                    sum_valid_ce_loss / len(valid_dataloader.dataset),
+                    sum_valid_tri_loss / len(valid_dataloader.dataset),
+                    end_valid_time - start_valid_time
+                )
+                logger.info(message)
+                return valid_loss, valid_acc
+
 
 
 if __name__ == '__main__':
