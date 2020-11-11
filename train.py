@@ -626,7 +626,6 @@ def valid(net, device=None, epoch=1, logger=None):
                 return valid_loss, valid_acc
 
 
-
 if __name__ == '__main__':
     net, trained_epoch, optimizer, valid_acc, savedir, logger = load_model()
     train(net, trained_epoch, optimizer, valid_acc, savedir, logger)

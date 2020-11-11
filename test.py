@@ -190,6 +190,8 @@ def test_net(net, savedir, logger, mode):
         net = net.to(device)
         classes = test_dataset.commands
         classes.append('_unknown_')
+        if config.HASSILENCE:
+            classes.append('_silence_')
         # thresholds = np.concatenate(
         #     (np.linspace(0.0, 0.2, 1000), np.linspace(0.2, 0.8, 500), np.linspace(0.8, 1.0, 1000)))
         thresholds = np.linspace(0.0, 1.0, 100)

@@ -80,6 +80,10 @@ class GoogleSpeechCommandDataset(Dataset):
             else:
                 print('SpeechDatasetV1 set error!')
 
+        if config.HASSILENCE:
+            self.silence = ['_silence_']
+            self.all_words.append('_silence_')
+
         self.data = []
         self.num_classes = config.NumClasses
 
@@ -172,6 +176,8 @@ class GoogleSpeechCommandDataset(Dataset):
             label_num = self.commands.index(word)
         if word in self.unknow_words:
             label_num = self.num_classes - 1
+        if word in self.silence:
+            label_num = self.num_classes - 2
         return label_num
 
     def normalize(self, tensor):
