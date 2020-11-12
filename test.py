@@ -189,9 +189,10 @@ def test_net(net, savedir, logger, mode):
     with torch.no_grad():
         net = net.to(device)
         classes = test_dataset.commands
-        classes.append('_unknown_')
         if config.HASSILENCE:
             classes.append('_silence_')
+        classes.append('_unknown_')
+
         # thresholds = np.concatenate(
         #     (np.linspace(0.0, 0.2, 1000), np.linspace(0.2, 0.8, 500), np.linspace(0.8, 1.0, 1000)))
         thresholds = np.linspace(0.0, 1.0, 100)
@@ -199,7 +200,7 @@ def test_net(net, savedir, logger, mode):
         result = np.zeros((len(thresholds), len(classes), 4))  # TP + FP + FN + TN
 
         with tqdm(test_dataloader, desc='Test', ncols=150) as t:
-            if mode == 'NoText':
+            if mode == 'NoText' or mode == 'FinetuneSilence':
                 sum_test_ce_loss = 0
                 batch_id = 0
                 correct = 0
@@ -433,7 +434,6 @@ def test_net(net, savedir, logger, mode):
                     end_test_time - start_test_time
                 )
                 logger.info(message)
-
 
         logger.info('[Test] Accuracy: {}/{} ({:.2f}%)\n'.format(correct, len(test_dataloader.dataset),
                                                                 100. * correct / len(test_dataloader.dataset)))

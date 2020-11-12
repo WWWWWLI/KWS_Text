@@ -74,7 +74,19 @@ def load_model():
         logger.info('[Message] Create new model.')
         logger.info('[Message] Create folder {}'.format(savedir))
     else:
-        savedir = config.TRAIN.MODELPATH.rsplit('/', 1)[0] + '/'
+        if config.TRAIN.MODE != 'FinetuneSilence':
+            savedir = config.TRAIN.MODELPATH.rsplit('/', 1)[0] + '/'
+        else:
+            loss = ''
+            for i in config.TRAIN.LOSS:
+                loss = loss + '-' + i
+            now_time = datetime.now()
+            savedir = config.SAVEDIR + 'trained/' + config.DATASET + '/' + config.TRAIN.MODELTYPE + '_FinetuneSilence' + loss + '/' + now_time.strftime(
+                '%Y%m%d%H%M%S') + '/'
+            if not os.path.exists(savedir):
+                os.makedirs(savedir)
+                os.makedirs(savedir + 'scripts/')
+                logger.info('[Message] Create folder {}'.format(savedir))
 
         handler = logging.FileHandler(savedir + 'log.log')
         handler.setLevel(logging.INFO)
@@ -85,11 +97,25 @@ def load_model():
         logger.addHandler(console)
 
         checkpoint = torch.load(config.TRAIN.MODELPATH)
-        net.load_state_dict(checkpoint['net'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
+        if config.TRAIN.MODE != 'FinetuneSilence':
+            net.load_state_dict(checkpoint['net'])
+            logger.info('[Message] Load Model:{}'.format(config.TRAIN.MODELPATH))
+            optimizer.load_state_dict(checkpoint['optimizer'])
+        else:
+            load_dict = {}
+            for k in net.state_dict().keys():
+                if k in checkpoint['net'].keys() and 'classifier' not in k and 'classifier2' not in k:
+                    load_dict[k] = checkpoint['net'][k]
+            net.load_state_dict(load_dict, strict=False)
+            logger.info('[Message] Load Model without classifier(1,2):{}'.format(config.TRAIN.MODELPATH))
+            optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()), lr=config.TRAIN.LR,
+                                  weight_decay=0.001, momentum=0.9)
+
         trained_epoch = checkpoint['epoch']
-        valid_acc = checkpoint['valid_acc']
-        logger.info('[Message] Load Model:{}'.format(config.TRAIN.MODELPATH))
+        if 'valid_acc' in checkpoint.keys():
+            valid_acc = checkpoint['valid_acc']
+        else:
+            valid_acc = 0.0
 
     logger.info('[Message] Model type {}'.format(config.TRAIN.MODELTYPE))
     logger.info('[Message] Save dir {}'.format(savedir))
@@ -147,7 +173,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
     for epoch in range(1, config.TRAIN.EPOCH + 1):
         net.train()
         with tqdm(train_dataloader, desc='Epoch {}'.format(epoch), ncols=150) as t:
-            if config.TRAIN.MODE == 'NoText':
+            if config.TRAIN.MODE == 'NoText' or config.TRAIN.MODE == 'FinetuneSilence':
                 sum_train_ce_loss = 0
                 start_epoch_time = time.time()
                 for (waveform, target) in t:
@@ -366,7 +392,7 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
                                                                                  best_valid_acc)
             if torch.cuda.device_count() == 1 or torch.cuda.device_count() == 0:
                 best_state = {'net': best_net.state_dict(), 'optimizer': optimizer.state_dict(),
-                              'epoch': best_epoch}
+                              'epoch': best_epoch, 'valid_acc': best_valid_acc}
             else:
                 best_state = {'net': best_net.module.state_dict(), 'optimizer': optimizer.state_dict(),
                               'epoch': best_epoch}
@@ -417,7 +443,7 @@ def valid(net, device=None, epoch=1, logger=None):
     with torch.no_grad():
         net = net.to(device)
         with tqdm(valid_dataloader, desc='Valid {}'.format(epoch), ncols=150) as t:
-            if config.TRAIN.MODE == 'NoText':
+            if config.TRAIN.MODE == 'NoText' or config.TRAIN.MODE == 'FinetuneSilence':
                 sum_valid_ce_loss = 0
                 batch_id = 0
                 correct = 0

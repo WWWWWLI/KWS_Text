@@ -104,7 +104,7 @@ class GoogleSpeechCommandDataset(Dataset):
             self.text_emb = np.load(config.TEXTEMB, allow_pickle=True).item()
 
     def __getitem__(self, i):
-        if self.mode == 'NoText':  # return normal data: waveform, label
+        if self.mode == 'NoText' or self.mode == 'FinetuneSilence':  # return normal data: waveform, label
             waveform, _ = torchaudio.load(self.dataset_path + self.y_data[i] + '/' + self.x_data[i])
             waveform = self.normalize(waveform)
             waveform = self.padding(waveform)
