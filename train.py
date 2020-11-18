@@ -170,6 +170,13 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
     best_epoch = 0
     best_state = None
 
+    # save model code
+    shutil.copy(config.ROOTDIR + 'models/' + config.TRAIN.MODELTYPE + '.py', savedir + 'scripts/')
+    shutil.copy(config.ROOTDIR + 'utils/' + 'dataloader.py', savedir + 'scripts/')
+    shutil.copy(config.ROOTDIR + 'config.py', savedir + 'scripts/')
+    shutil.copy(config.ROOTDIR + 'train.py', savedir + 'scripts/')
+    shutil.copy(config.ROOTDIR + 'test.py', savedir + 'scripts/')
+
     for epoch in range(1, config.TRAIN.EPOCH + 1):
         net.train()
         with tqdm(train_dataloader, desc='Epoch {}'.format(epoch), ncols=150) as t:
@@ -412,13 +419,6 @@ def train(net, trained_epoch, optimizer, best_valid_acc, savedir, logger):
         best_epoch,
         best_valid_loss,
         best_valid_acc))
-
-    # save model code
-    shutil.copy(config.ROOTDIR + 'models/' + config.TRAIN.MODELTYPE + '.py', savedir + 'scripts/')
-    shutil.copy(config.ROOTDIR + 'utils/' + 'dataloader.py', savedir + 'scripts/')
-    shutil.copy(config.ROOTDIR + 'config.py', savedir + 'scripts/')
-    shutil.copy(config.ROOTDIR + 'train.py', savedir + 'scripts/')
-    shutil.copy(config.ROOTDIR + 'test.py', savedir + 'scripts/')
 
     test_net(best_net, savedir, logger, config.TRAIN.MODE)
 
