@@ -175,6 +175,9 @@ def test_net(net, savedir, logger, mode):
     acc_file = open(savedir + '/test_acc.txt', 'w+')
     acc_file.truncate()
 
+    if config.TEST.SAVEEMBEDDINGS:
+        embedding_dic = {}
+
     losses = savedir.rsplit('/', 2)[0].split('-')
     if 'CE' in losses:
         # Cross entropy loss
@@ -211,7 +214,17 @@ def test_net(net, savedir, logger, mode):
                     waveform = waveform.type(torch.FloatTensor)
                     waveform, target = waveform.to(device), target.to(device)
 
-                    output = net(waveform)
+                    if config.TEST.SAVEEMBEDDINGS:
+                        output, embeddings = net(waveform)
+                        embeddings = embeddings.cpu().numpy()
+                        labels = target.cpu().numpy()
+                        for i in range(config.TEST.BATCHSIZE):
+                            if labels[i] in embedding_dic.keys():
+                                embedding_dic[labels[i]] = np.row_stack((embedding_dic[labels[i]], embeddings[i]))
+                            else:
+                                embedding_dic[labels[i]] = embeddings[i]
+                    else:
+                        output = net(waveform)
 
                     test_ce_loss = ce_criterion(output, target)
 
@@ -492,6 +505,9 @@ def test_net(net, savedir, logger, mode):
         np.save(savedir + '/test_result.npy', test_result)
 
         acc_file.close()
+
+        if config.TEST.SAVEEMBEDDINGS:
+            np.save(savedir + '/label_embeddidngs.npy', embedding_dic)
 
         plt.plot(FPR, FNR, label=config.TEST.MODELTYPE)
         plt.legend()

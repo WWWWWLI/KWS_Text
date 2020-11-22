@@ -46,10 +46,15 @@ class LGNet6(nn.Module):
         x = x.contiguous().view(x.size(0), -1)
         x = self.dropout(x)
         x = self.classifier(x)
+        if config.TEST.SAVEEMBEDDINGS:
+            embedding = x
         if config.TRAIN.MODE == 'FinetuneSilence':
             x = self.dropout(x)
             x = self.classifier2(x)
-        return x
+        if config.TEST.SAVEEMBEDDINGS:
+            return x, embedding
+        else:
+            return x
 
     def init_weights(self):
         print('[Message] Init models.')
