@@ -11,9 +11,9 @@ tqdm==4.48.2
 
 # Usage
 Change config.py to train different models in different modes.
-## dataset
+## Dataset
 Support Google Speech Commands Dataset v1 and v2.
-## Train origin models (LGNet3, LGNet6, etc.)
+## Set up
 MODELTYPE: The type of model. (e.g. LGNet6)
 
 LOSS: Loss function, ['CE'] for LGNet6, ['CE', 'TRIPLET'] for LGNet6_ThreeAudios.
