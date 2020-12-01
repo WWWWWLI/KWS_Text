@@ -19,3 +19,6 @@ MODELTYPE: The type of model. (e.g. LGNet6)
 LOSS: Loss function, ['CE'] for LGNet6, ['CE', 'TRIPLET'] for LGNet6_ThreeAudios.
 
 MODE: Train or test mode.
+
+# Maintainers
+@WWWWWLI
